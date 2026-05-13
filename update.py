@@ -28,7 +28,6 @@ ZONES = [
 ]
 
 # How wide the PLAYERS column can grow before wrapping to the next line.
-# Increase if your guild has many people per zone.
 PLAYERS_COL_WIDTH = 24
 
 
