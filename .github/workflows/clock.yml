@@ -2,8 +2,8 @@ name: Update Discord clock
 
 on:
   workflow_dispatch:    # lets you run it manually with a button
-   schedule:
-    - cron: '*/2 * * * *' 
+     schedule:
+       - cron: '*/2 * * * *'
 
 jobs:
   update:
