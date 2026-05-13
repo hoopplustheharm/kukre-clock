@@ -1,9 +1,9 @@
 name: Update Discord clock
 
 on:
-  workflow_dispatch:    # lets you run it manually with a button
-     schedule:
-       - cron: '*/2 * * * *'
+  workflow_dispatch:
+  schedule:
+    - cron: '*/5 * * * *'
 
 jobs:
   update:
@@ -15,6 +15,7 @@ jobs:
           python-version: '3.12'
       - run: pip install requests
       - env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          DISCORD_BOT_TOKEN:  ${{ secrets.DISCORD_BOT_TOKEN }}
+          DISCORD_CHANNEL_ID: ${{ secrets.DISCORD_CHANNEL_ID }}
           DISCORD_MESSAGE_ID: ${{ secrets.DISCORD_MESSAGE_ID }}
         run: python update.py
