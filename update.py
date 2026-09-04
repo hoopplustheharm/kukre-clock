@@ -114,7 +114,16 @@ def wrap_names(names, max_width):
     if current:
         lines.append(current)
     return lines
-
+    
+def utc_offset_str(dt):
+    """Format a timezone-aware datetime's UTC offset as 'UTC+9' or 'UTC-4:30'."""
+    offset = dt.utcoffset()
+    total_min = int(offset.total_seconds() / 60)
+    sign = "+" if total_min >= 0 else "-"
+    hours, mins = divmod(abs(total_min), 60)
+    if mins:
+        return f"UTC{sign}{hours}:{mins:02d}"
+    return f"UTC{sign}{hours}"
 
 def build_table(now_utc, reactions):
     active_zones = [(e, l, tz, c) for (e, l, tz, c) in ZONES if reactions.get(e)]
