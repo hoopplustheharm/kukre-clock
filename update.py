@@ -106,14 +106,11 @@ def truncate(s, limit):
         return s
     return s[: limit - 1] + "…"
 
-
 def format_name(user):
-    """Return 'Nickname (@handle)' if a server nickname exists, else just the display name.
-    Both parts are individually truncated to keep the roster from bleeding across rows."""
-    handle = truncate(user["username"], MAX_NAME_LEN)
+    """Return the user's best available name: server nickname > global display name > username."""
     nick = get_guild_nickname(user["id"])
     if nick:
-        return f"{truncate(nick, MAX_NAME_LEN)} (@{handle})"
+        return truncate(nick, MAX_NAME_LEN)
     display = user.get("global_name") or user["username"]
     return truncate(display, MAX_NAME_LEN)
 
@@ -238,6 +235,7 @@ def build_content(reactions):
                 "⠀",
             ]
     lines += [
+        "## 🕒 Guildie Time Zones",
         table,
         f"React to add yourself:  {legend}",
         f"_Last refresh: <t:{int(now.timestamp())}:R>_",
