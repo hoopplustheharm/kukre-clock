@@ -25,15 +25,24 @@ MOTD_NAME = "Tengu"
 MOTD_URL  = f"https://cp.arcadia-online.org/monster/view/?id={MOTD_ID}"
 
 ZONES = [
-    ("🌴", "PST / PDT",   "America/Los_Angeles", "LA, Vancouver, Seattle"),
-    ("🌵", "MST / MDT",   "America/Denver",      "Denver, Phoenix, Calgary"),
-    ("🌽", "CST / CDT",   "America/Chicago",     "Chicago, Dallas, Mexico"),
-    ("🗽", "EST / EDT",   "America/New_York",    "NYC, Toronto, Atlanta"),
-    ("🇬🇧", "UTC / GMT",   "Etc/UTC",             "London (winter), Reykjavik"),
-    ("🥖", "CET / CEST",  "Europe/Berlin",       "Berlin, Paris, Madrid"),
-    ("🇰🇷", "KST",         "Asia/Seoul",          "Seoul, Busan"),
-    ("🍣", "JST",         "Asia/Tokyo",          "Tokyo, Osaka"),
-    ("🦘", "AEST / AEDT", "Australia/Sydney",    "Sydney, Melbourne"),
+    ("🌴", "Pacific",         "America/Los_Angeles",             "LA, Vancouver, Seattle, Portland"),
+    ("🌵", "Mountain",        "America/Denver",                  "Denver, Phoenix, Calgary"),
+    ("🌽", "Central",         "America/Chicago",                 "Chicago, Dallas, Mexico City"),
+    ("🗽", "Eastern",         "America/New_York",                "NYC, Toronto, Atlanta, Miami"),
+    ("🇧🇷", "Brazil",          "America/Sao_Paulo",               "São Paulo, Rio"),
+    ("🇦🇷", "Argentina",       "America/Argentina/Buenos_Aires",  "Buenos Aires"),
+    ("🇬🇧", "UK / Ireland",    "Europe/London",                   "London, Dublin, Lisbon"),
+    ("🥖", "Central Europe",  "Europe/Berlin",                   "Berlin, Paris, Madrid, Rome"),
+    ("🇬🇷", "Eastern Europe",  "Europe/Athens",                   "Athens, Helsinki, Bucharest"),
+    ("🇹🇷", "Turkey",          "Europe/Istanbul",                 "Istanbul, Ankara"),
+    ("🇷🇺", "Moscow",          "Europe/Moscow",                   "Moscow, St. Petersburg"),
+    ("🇮🇳", "India",           "Asia/Kolkata",                    "Delhi, Mumbai, Bangalore"),
+    ("🇸🇬", "SE Asia",         "Asia/Singapore",                  "Singapore, KL, Manila, HK"),
+    ("🇨🇳", "China",           "Asia/Shanghai",                   "Beijing, Shanghai, Taipei"),
+    ("🇰🇷", "Korea",           "Asia/Seoul",                      "Seoul, Busan"),
+    ("🍣", "Japan",           "Asia/Tokyo",                      "Tokyo, Osaka"),
+    ("🇦🇺", "East Australia",  "Australia/Sydney",                "Sydney, Melbourne, Brisbane"),
+    ("🇳🇿", "New Zealand",     "Pacific/Auckland",                "Auckland, Wellington"),
 ]
 
 PLAYERS_COL_WIDTH = 32   # wider now to accommodate "Nick (@handle)"
