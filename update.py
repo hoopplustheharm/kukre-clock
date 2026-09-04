@@ -235,9 +235,10 @@ def build_content(reactions):
                 "⠀",
             ]
     lines += [
-        "## 🕒 Guildie Time Zones",
+        "## 🕒 Guildie Time Zones:",
         table,
         f"React to add yourself:  {legend}",
+        "⠀",
         f"_Last refresh: <t:{int(now.timestamp())}:R>_",
     ]
     return "\n".join(lines)
