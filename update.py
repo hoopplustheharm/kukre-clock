@@ -127,4 +127,56 @@ def build_content(reactions):
     try:
         set_at = get_last_commit_time()
     except Exception as e:
-        print(f"Warning: couldn't fetch last
+        print(f"Warning: couldn't fetch last commit time: {e}")
+        set_at = None
+
+    if set_at is not None:
+        next_midnight_utc = (set_at + timedelta(days=1)).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        if now < next_midnight_utc:
+            lines.append(f"🐉 **Monster of the Day:** [{MOTD_NAME}]({MOTD_URL})")
+
+    lines += [
+        f"**🕒 Server Time: {server_time}**",
+        "",
+        table,
+        f"React to add yourself:  {legend}",
+        f"_Last refresh: <t:{int(now.timestamp())}:R>_",
+    ]
+    return "\n".join(lines)
+
+
+def post_message(content):
+    r = requests.post(f"{API}/channels/{CHANNEL_ID}/messages",
+                      headers=HEADERS, json={"content": content})
+    r.raise_for_status()
+    return r.json()
+
+
+def edit_message(content):
+    r = requests.patch(f"{API}/channels/{CHANNEL_ID}/messages/{MSG_ID}",
+                       headers=HEADERS, json={"content": content})
+    r.raise_for_status()
+
+
+def seed_reactions(message_id):
+    for emoji, *_ in ZONES:
+        encoded = quote(emoji, safe="")
+        url = f"{API}/channels/{CHANNEL_ID}/messages/{message_id}/reactions/{encoded}/@me"
+        r = requests.put(url, headers=HEADERS)
+        if not r.ok:
+            print(f"Warning: couldn't seed {emoji}: {r.status_code} {r.text}")
+
+
+if not MSG_ID:
+    msg = post_message(build_content({e: [] for e, *_ in ZONES}))
+    seed_reactions(msg["id"])
+    print("=" * 60)
+    print(f"MESSAGE_ID = {msg['id']}")
+    print("Copy this ID into the DISCORD_MESSAGE_ID secret, then pin the message.")
+    print("=" * 60)
+else:
+    reactions = {emoji: get_users_for_reaction(emoji) for emoji, *_ in ZONES}
+    edit_message(build_content(reactions))
+    print(f"Updated message {MSG_ID}")
