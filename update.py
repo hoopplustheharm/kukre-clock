@@ -1,5 +1,6 @@
 import os
 import requests
+import time
 from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
 from urllib.parse import quote
@@ -39,6 +40,19 @@ ZONES = [
 PLAYERS_COL_WIDTH = 24
 
 
+def discord_get(url, params=None, max_retries=3):
+    """GET with automatic 429 backoff using Discord's Retry-After header."""
+    for attempt in range(max_retries):
+        r = requests.get(url, headers=HEADERS, params=params)
+        if r.status_code == 429:
+            wait = float(r.headers.get("Retry-After", "1"))
+            print(f"Rate limited; sleeping {wait:.1f}s then retrying")
+            time.sleep(wait + 0.5)
+            continue
+        return r
+    return r  # give up, return the last (still-429) response
+
+
 def get_users_for_reaction(emoji):
     encoded = quote(emoji, safe="")
     url = f"{API}/channels/{CHANNEL_ID}/messages/{MSG_ID}/reactions/{encoded}"
@@ -47,7 +61,7 @@ def get_users_for_reaction(emoji):
         params = {"limit": 100}
         if after:
             params["after"] = after
-        r = requests.get(url, headers=HEADERS, params=params)
+        r = discord_get(url, params=params)
         if r.status_code == 404:
             return []
         r.raise_for_status()
@@ -57,6 +71,19 @@ def get_users_for_reaction(emoji):
             break
         after = batch[-1]["id"]
     return users
+
+
+def get_message_reactions_summary():
+    """Fetch the message once. Return {emoji_char: count_including_bot}."""
+    url = f"{API}/channels/{CHANNEL_ID}/messages/{MSG_ID}"
+    r = discord_get(url)
+    r.raise_for_status()
+    msg = r.json()
+    summary = {}
+    for reaction in msg.get("reactions", []):
+        name = reaction["emoji"]["name"]
+        summary[name] = reaction["count"]
+    return summary
 
 
 def wrap_names(names, max_width):
@@ -177,6 +204,15 @@ if not MSG_ID:
     print("Copy this ID into the DISCORD_MESSAGE_ID secret, then pin the message.")
     print("=" * 60)
 else:
-    reactions = {emoji: get_users_for_reaction(emoji) for emoji, *_ in ZONES}
+    # 1 API call: get all reaction counts at once
+    counts = get_message_reactions_summary()
+    # Only query full user lists for emojis that actually have non-bot reactions.
+    # Bot's own seed reaction counts as 1, so we need count > 1.
+    reactions = {}
+    for emoji, *_ in ZONES:
+        if counts.get(emoji, 0) > 1:
+            reactions[emoji] = get_users_for_reaction(emoji)
+        else:
+            reactions[emoji] = []
     edit_message(build_content(reactions))
     print(f"Updated message {MSG_ID}")
