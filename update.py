@@ -131,7 +131,19 @@ def build_table(now_utc, reactions):
     if not active_zones:
         return "```\n(No zones yet — react below to add yourself.)\n```"
 
-    rows = []
+    # Sort chronologically by UTC offset (earliest local time first).
+    active_zones.sort(key=lambda z: ZoneInfo(z[2]).utcoffset(now_utc))
+
+    # Row 0 is server time itself.
+    server_row = (
+        now_utc.strftime("%a %b %d %H:%M"),
+        "UTC+0",
+        "SERVER →",
+        "(Arcadia game time)",
+        [],  # no players column entry
+    )
+
+    rows = [server_row]
     for emoji, label, tz, cities in active_zones:
         t = now_utc.astimezone(ZoneInfo(tz))
         time_s = t.strftime("%a %b %d %H:%M")
@@ -146,24 +158,24 @@ def build_table(now_utc, reactions):
     cw = max(len("CITIES"), max(len(r[3]) for r in rows))
     pw = PLAYERS_COL_WIDTH
 
-    # Server time banner row — a full-width single-cell row above the header.
-    server_time_str = now_utc.strftime("%a %b %d %H:%M") + ", UTC+0"
-    total_width = tw + uw + zw + cw + pw + 8  # 4 gaps of 2 spaces = 8
-    banner_text = f">>> SERVER TIME: {server_time_str} <<<"
-    banner = banner_text.center(total_width)
-
     lines = [
-        banner,
-        "─" * total_width,
+        "",
         f"{'TIME':<{tw}}  {'UTC':<{uw}}  {'ZONE':<{zw}}  {'CITIES':<{cw}}  PLAYERS",
         f"{'─'*tw}  {'─'*uw}  {'─'*zw}  {'─'*cw}  {'─'*pw}",
     ]
     pad_empty = f"{'':<{tw}}  {'':<{uw}}  {'':<{zw}}  {'':<{cw}}  "
-    for time_s, off_s, zone_s, cities_s, names in rows:
-        chunks = wrap_names(names, pw)
+
+    for i, (time_s, off_s, zone_s, cities_s, names) in enumerate(rows):
+        players_display = "—" if not names else wrap_names(names, pw)[0]
+        chunks = wrap_names(names, pw) if names else [""]
         lines.append(f"{time_s:<{tw}}  {off_s:<{uw}}  {zone_s:<{zw}}  {cities_s:<{cw}}  {chunks[0]}")
         for cont in chunks[1:]:
             lines.append(f"{pad_empty}{cont}")
+
+        # Add separator line right after the server row (row 0)
+        if i == 0:
+            lines.append(f"{'─'*tw}  {'─'*uw}  {'─'*zw}  {'─'*cw}  {'─'*pw}")
+
     return "```\n" + "\n".join(lines) + "\n```"
 
 
