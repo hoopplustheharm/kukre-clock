@@ -229,8 +229,12 @@ def build_content(reactions):
             hour=0, minute=0, second=0, microsecond=0
         )
         if now < next_midnight_utc:
+            remaining = next_midnight_utc - now
+            hrs = int(remaining.total_seconds() // 3600)
+            mins = int((remaining.total_seconds() % 3600) // 60)
+            countdown = f"{hrs:02d}h {mins:02d}m left"
             lines += [
-                f"## 🐉 Monster of the Day: [{MOTD_NAME}]({MOTD_URL})",
+                f"## 🐉 Monster of the Day: [{MOTD_NAME}]({MOTD_URL})  _({countdown})_",
                 "⠀",
             ]
     lines += [
