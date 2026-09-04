@@ -165,7 +165,7 @@ def build_content(reactions):
     legend = " · ".join(f"{e} {l.split(' / ')[0]}" for e, l, *_ in ZONES)
     server_time = now.strftime("%I:%M %p").lstrip("0") + " UTC (+0)"
 
-    lines = []  # leading blank line pushes MotD away from the bot's name
+    lines = ["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]
     try:
         set_at = get_last_commit_time()
     except Exception as e:
