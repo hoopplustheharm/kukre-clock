@@ -1,6 +1,6 @@
 import os
 import requests
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
 from urllib.parse import quote
 
@@ -13,6 +13,15 @@ HEADERS = {
     "Authorization": f"Bot {BOT_TOKEN}",
     "Content-Type":  "application/json",
 }
+
+# Used to fetch when this file was last modified — that timestamp becomes the "MotD set at" moment.
+GITHUB_REPO = "hoopplustheharm/kukre-clock"
+GITHUB_FILE = "update.py"   # change to "main.py" if you renamed the file
+
+# ---- Monster of the Day (edit both when a new monster is announced, then commit) ----
+MOTD_ID   = 1405
+MOTD_NAME = "Tengu"
+MOTD_URL  = f"https://cp.arcadia-online.org/monster/view/?id={MOTD_ID}"
 
 # (emoji, label, IANA timezone, major cities)
 ZONES = [
@@ -27,7 +36,6 @@ ZONES = [
     ("🦘", "AEST / AEDT", "Australia/Sydney",    "Sydney, Melbourne"),
 ]
 
-# How wide the PLAYERS column can grow before wrapping to the next line.
 PLAYERS_COL_WIDTH = 24
 
 
@@ -96,49 +104,27 @@ def build_table(now_utc, reactions):
     return "```\n" + "\n".join(lines) + "\n```"
 
 
+def get_last_commit_time():
+    """Return the UTC datetime of the most recent commit that touched this file on main."""
+    url = f"https://api.github.com/repos/{GITHUB_REPO}/commits"
+    params = {"path": GITHUB_FILE, "sha": "main", "per_page": 1}
+    r = requests.get(url, params=params, timeout=10)
+    r.raise_for_status()
+    commits = r.json()
+    if not commits:
+        return None
+    iso = commits[0]["commit"]["committer"]["date"]  # e.g. "2026-09-04T00:03:12Z"
+    return datetime.fromisoformat(iso.replace("Z", "+00:00"))
+
+
 def build_content(reactions):
     now = datetime.now(timezone.utc)
     table = build_table(now, reactions)
     legend = " · ".join(f"{e} {l.split(' / ')[0]}" for e, l, *_ in ZONES)
-    return "\n".join([
-        "## 🕒 Guild Time Zones",
-        "",
-        table,
-        f"React to add yourself:  {legend}",
-        f"_Last refresh: <t:{int(now.timestamp())}:R>_",
-    ])
+    server_time = now.strftime("%a %b %d, %H:%M UTC")
 
-
-def post_message(content):
-    r = requests.post(f"{API}/channels/{CHANNEL_ID}/messages",
-                      headers=HEADERS, json={"content": content})
-    r.raise_for_status()
-    return r.json()
-
-
-def edit_message(content):
-    r = requests.patch(f"{API}/channels/{CHANNEL_ID}/messages/{MSG_ID}",
-                       headers=HEADERS, json={"content": content})
-    r.raise_for_status()
-
-
-def seed_reactions(message_id):
-    for emoji, *_ in ZONES:
-        encoded = quote(emoji, safe="")
-        url = f"{API}/channels/{CHANNEL_ID}/messages/{message_id}/reactions/{encoded}/@me"
-        r = requests.put(url, headers=HEADERS)
-        if not r.ok:
-            print(f"Warning: couldn't seed {emoji}: {r.status_code} {r.text}")
-
-
-if not MSG_ID:
-    msg = post_message(build_content({e: [] for e, *_ in ZONES}))
-    seed_reactions(msg["id"])
-    print("=" * 60)
-    print(f"MESSAGE_ID = {msg['id']}")
-    print("Add this as a secret named DISCORD_MESSAGE_ID, then pin the message.")
-    print("=" * 60)
-else:
-    reactions = {emoji: get_users_for_reaction(emoji) for emoji, *_ in ZONES}
-    edit_message(build_content(reactions))
-    print(f"Updated message {MSG_ID}")
+    lines = []
+    try:
+        set_at = get_last_commit_time()
+    except Exception as e:
+        print(f"Warning: couldn't fetch last
