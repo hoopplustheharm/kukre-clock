@@ -253,15 +253,21 @@ def edit_message(content):
                        headers=HEADERS, json={"content": content})
     r.raise_for_status()
 
-
 def seed_reactions(message_id):
     for emoji, *_ in ZONES:
         encoded = quote(emoji, safe="")
         url = f"{API}/channels/{CHANNEL_ID}/messages/{message_id}/reactions/{encoded}/@me"
-        r = requests.put(url, headers=HEADERS)
-        if not r.ok:
-            print(f"Warning: couldn't seed {emoji}: {r.status_code} {r.text}")
-
+        for attempt in range(4):
+            r = requests.put(url, headers=HEADERS)
+            if r.status_code == 429:
+                wait = float(r.headers.get("Retry-After", "1"))
+                print(f"Rate limited seeding {emoji}; sleeping {wait:.1f}s")
+                time.sleep(wait + 0.3)
+                continue
+            if not r.ok:
+                print(f"Warning: couldn't seed {emoji}: {r.status_code} {r.text}")
+            break
+        time.sleep(0.3)  # small delay between seeds to stay under Discord's rate limit
 
 if not MSG_ID:
     msg = post_message(build_content({e: [] for e, *_ in ZONES}))
