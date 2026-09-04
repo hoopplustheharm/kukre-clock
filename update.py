@@ -117,27 +117,42 @@ def wrap_names(names, max_width):
 
 
 def build_table(now_utc, reactions):
+    active_zones = [(e, l, tz, c) for (e, l, tz, c) in ZONES if reactions.get(e)]
+
+    if not active_zones:
+        return "```\n(No zones yet — react below to add yourself.)\n```"
+
     rows = []
-    for emoji, label, tz, cities in ZONES:
+    for emoji, label, tz, cities in active_zones:
         t = now_utc.astimezone(ZoneInfo(tz))
         time_s = t.strftime("%a %b %d %H:%M")
+        offset_s = utc_offset_str(t)
         users = reactions.get(emoji, [])
         names = [format_name(u) for u in users]
-        rows.append((time_s, label, cities, names))
+        rows.append((time_s, offset_s, label, cities, names))
 
     tw = max(len("TIME"),   max(len(r[0]) for r in rows))
-    zw = max(len("ZONE"),   max(len(r[1]) for r in rows))
-    cw = max(len("CITIES"), max(len(r[2]) for r in rows))
+    uw = max(len("UTC"),    max(len(r[1]) for r in rows))
+    zw = max(len("ZONE"),   max(len(r[2]) for r in rows))
+    cw = max(len("CITIES"), max(len(r[3]) for r in rows))
     pw = PLAYERS_COL_WIDTH
 
+    # Server time banner row — a full-width single-cell row above the header.
+    server_time_str = now_utc.strftime("%I:%M %p").lstrip("0") + " UTC (+0)"
+    total_width = tw + uw + zw + cw + pw + 8  # 4 gaps of 2 spaces = 8
+    banner_text = f">>> SERVER TIME: {server_time_str} <<<"
+    banner = banner_text.center(total_width)
+
     lines = [
-        f"{'TIME':<{tw}}  {'ZONE':<{zw}}  {'CITIES':<{cw}}  PLAYERS",
-        f"{'─'*tw}  {'─'*zw}  {'─'*cw}  {'─'*pw}",
+        banner,
+        "─" * total_width,
+        f"{'TIME':<{tw}}  {'UTC':<{uw}}  {'ZONE':<{zw}}  {'CITIES':<{cw}}  PLAYERS",
+        f"{'─'*tw}  {'─'*uw}  {'─'*zw}  {'─'*cw}  {'─'*pw}",
     ]
-    pad_empty = f"{'':<{tw}}  {'':<{zw}}  {'':<{cw}}  "
-    for time_s, zone_s, cities_s, names in rows:
+    pad_empty = f"{'':<{tw}}  {'':<{uw}}  {'':<{zw}}  {'':<{cw}}  "
+    for time_s, off_s, zone_s, cities_s, names in rows:
         chunks = wrap_names(names, pw)
-        lines.append(f"{time_s:<{tw}}  {zone_s:<{zw}}  {cities_s:<{cw}}  {chunks[0]}")
+        lines.append(f"{time_s:<{tw}}  {off_s:<{uw}}  {zone_s:<{zw}}  {cities_s:<{cw}}  {chunks[0]}")
         for cont in chunks[1:]:
             lines.append(f"{pad_empty}{cont}")
     return "```\n" + "\n".join(lines) + "\n```"
@@ -162,10 +177,10 @@ def get_last_commit_time():
 def build_content(reactions):
     now = datetime.now(timezone.utc)
     table = build_table(now, reactions)
-    legend = " · ".join(f"{e} {l.split(' / ')[0]}" for e, l, *_ in ZONES)
-    server_time = now.strftime("%I:%M %p").lstrip("0") + " UTC (+0)"
+    legend = " · ".join(f"{e} {l}" for e, l, *_ in ZONES)
 
-    lines = ["⠀"]
+    lines = ["⠀"]  # braille blank U+2800 = leading gap
+
     try:
         set_at = get_last_commit_time()
     except Exception as e:
@@ -177,11 +192,13 @@ def build_content(reactions):
             hour=0, minute=0, second=0, microsecond=0
         )
         if now < next_midnight_utc:
-            lines.append(f"🐉 **Monster of the Day:** [{MOTD_NAME}]({MOTD_URL})")
+            lines += [
+                "## 🐉 Monster of the Day",
+                f"→ [{MOTD_NAME}]({MOTD_URL})",
+                "",
+            ]
 
     lines += [
-        f"**🕒 Server Time: {server_time}**",
-        "",
         table,
         f"React to add yourself:  {legend}",
         f"_Last refresh: <t:{int(now.timestamp())}:R>_",
