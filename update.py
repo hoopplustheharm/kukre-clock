@@ -215,9 +215,8 @@ def build_content(reactions):
         if now < next_midnight_utc:
             lines += [
                 f"## 🐉 Monster of the Day: [{MOTD_NAME}]({MOTD_URL})",
-                "",
+                "⠀",
             ]
-
     lines += [
         table,
         f"React to add yourself:  {legend}",
