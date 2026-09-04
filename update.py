@@ -137,9 +137,6 @@ def utc_offset_str(dt):
 def build_table(now_utc, reactions):
     active_zones = [(e, l, tz, c) for (e, l, tz, c) in ZONES if reactions.get(e)]
 
-    if not active_zones:
-        return "```\n(No zones yet — react below to add yourself.)\n```"
-
     # Sort chronologically by UTC offset (earliest local time first).
     active_zones.sort(key=lambda z: ZoneInfo(z[2]).utcoffset(now_utc))
 
