@@ -147,7 +147,7 @@ def build_table(now_utc, reactions):
     pw = PLAYERS_COL_WIDTH
 
     # Server time banner row — a full-width single-cell row above the header.
-    server_time_str = now_utc.strftime("%I:%M %p").lstrip("0") + " UTC (+0)"
+    server_time_str = now_utc.strftime("%a %b %d %H:%M") + ", UTC+0"
     total_width = tw + uw + zw + cw + pw + 8  # 4 gaps of 2 spaces = 8
     banner_text = f">>> SERVER TIME: {server_time_str} <<<"
     banner = banner_text.center(total_width)
@@ -202,8 +202,7 @@ def build_content(reactions):
         )
         if now < next_midnight_utc:
             lines += [
-                "## 🐉 Monster of the Day",
-                f"→ [{MOTD_NAME}]({MOTD_URL})",
+                f"## 🐉 Monster of the Day: [{MOTD_NAME}]({MOTD_URL})",
                 "",
             ]
 
