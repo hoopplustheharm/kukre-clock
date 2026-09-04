@@ -14,7 +14,7 @@ jobs:
         with:
           python-version: '3.12'
       - run: pip install requests
-         - env:
+      - env:
              DISCORD_BOT_TOKEN:  ${{ secrets.DISCORD_BOT_TOKEN }}
              DISCORD_CHANNEL_ID: ${{ secrets.DISCORD_CHANNEL_ID }}
              DISCORD_GUILD_ID:   ${{ secrets.DISCORD_GUILD_ID }}
