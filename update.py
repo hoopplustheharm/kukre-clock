@@ -1,12 +1,13 @@
 import os
-import requests
 import time
+import requests
 from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
 from urllib.parse import quote
 
 BOT_TOKEN  = os.environ["DISCORD_BOT_TOKEN"]
 CHANNEL_ID = os.environ["DISCORD_CHANNEL_ID"]
+GUILD_ID   = os.environ["DISCORD_GUILD_ID"]
 MSG_ID     = os.environ.get("DISCORD_MESSAGE_ID", "").strip()
 
 API = "https://discord.com/api/v10"
@@ -15,16 +16,14 @@ HEADERS = {
     "Content-Type":  "application/json",
 }
 
-# Used to fetch when this file was last modified — that timestamp becomes the "MotD set at" moment.
 GITHUB_REPO = "hoopplustheharm/kukre-clock"
-GITHUB_FILE = "update.py"   # change to "main.py" if you renamed the file
+GITHUB_FILE = "update.py"
 
 # ---- Monster of the Day (edit both when a new monster is announced, then commit) ----
 MOTD_ID   = 1405
 MOTD_NAME = "Tengu"
 MOTD_URL  = f"https://cp.arcadia-online.org/monster/view/?id={MOTD_ID}"
 
-# (emoji, label, IANA timezone, major cities)
 ZONES = [
     ("🌴", "PST / PDT",   "America/Los_Angeles", "LA, Vancouver, Seattle"),
     ("🌵", "MST / MDT",   "America/Denver",      "Denver, Phoenix, Calgary"),
@@ -37,11 +36,10 @@ ZONES = [
     ("🦘", "AEST / AEDT", "Australia/Sydney",    "Sydney, Melbourne"),
 ]
 
-PLAYERS_COL_WIDTH = 24
+PLAYERS_COL_WIDTH = 32   # wider now to accommodate "Nick (@handle)"
 
 
 def discord_get(url, params=None, max_retries=3):
-    """GET with automatic 429 backoff using Discord's Retry-After header."""
     for attempt in range(max_retries):
         r = requests.get(url, headers=HEADERS, params=params)
         if r.status_code == 429:
@@ -50,7 +48,15 @@ def discord_get(url, params=None, max_retries=3):
             time.sleep(wait + 0.5)
             continue
         return r
-    return r  # give up, return the last (still-429) response
+    return r
+
+
+def get_message_reactions_summary():
+    url = f"{API}/channels/{CHANNEL_ID}/messages/{MSG_ID}"
+    r = discord_get(url)
+    r.raise_for_status()
+    msg = r.json()
+    return {reaction["emoji"]["name"]: reaction["count"] for reaction in msg.get("reactions", [])}
 
 
 def get_users_for_reaction(emoji):
@@ -73,21 +79,27 @@ def get_users_for_reaction(emoji):
     return users
 
 
-def get_message_reactions_summary():
-    """Fetch the message once. Return {emoji_char: count_including_bot}."""
-    url = f"{API}/channels/{CHANNEL_ID}/messages/{MSG_ID}"
+def get_guild_nickname(user_id):
+    """Return the user's server nickname, or None if unset / not in guild."""
+    url = f"{API}/guilds/{GUILD_ID}/members/{user_id}"
     r = discord_get(url)
+    if r.status_code == 404:
+        return None
     r.raise_for_status()
-    msg = r.json()
-    summary = {}
-    for reaction in msg.get("reactions", []):
-        name = reaction["emoji"]["name"]
-        summary[name] = reaction["count"]
-    return summary
+    return r.json().get("nick")  # None if no nickname set
+
+
+def format_name(user):
+    """Return 'Nickname (@handle)' if a server nickname exists, else just the display name."""
+    handle = user["username"]
+    nick = get_guild_nickname(user["id"])
+    if nick:
+        return f"{nick} (@{handle})"
+    display = user.get("global_name") or handle
+    return display
 
 
 def wrap_names(names, max_width):
-    """Pack names into lines no wider than `max_width` chars."""
     if not names:
         return ["—"]
     lines, current = [], ""
@@ -110,7 +122,7 @@ def build_table(now_utc, reactions):
         t = now_utc.astimezone(ZoneInfo(tz))
         time_s = t.strftime("%a %b %d %H:%M")
         users = reactions.get(emoji, [])
-        names = [u.get("global_name") or u["username"] for u in users]
+        names = [format_name(u) for u in users]
         rows.append((time_s, label, cities, names))
 
     tw = max(len("TIME"),   max(len(r[0]) for r in rows))
@@ -132,15 +144,18 @@ def build_table(now_utc, reactions):
 
 
 def get_last_commit_time():
-    """Return the UTC datetime of the most recent commit that touched this file on main."""
     url = f"https://api.github.com/repos/{GITHUB_REPO}/commits"
     params = {"path": GITHUB_FILE, "sha": "main", "per_page": 1}
-    r = requests.get(url, params=params, timeout=10)
+    headers = {}
+    token = os.environ.get("GITHUB_API_TOKEN", "")
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    r = requests.get(url, params=params, headers=headers, timeout=10)
     r.raise_for_status()
     commits = r.json()
     if not commits:
         return None
-    iso = commits[0]["commit"]["committer"]["date"]  # e.g. "2026-09-04T00:03:12Z"
+    iso = commits[0]["commit"]["committer"]["date"]
     return datetime.fromisoformat(iso.replace("Z", "+00:00"))
 
 
@@ -148,9 +163,9 @@ def build_content(reactions):
     now = datetime.now(timezone.utc)
     table = build_table(now, reactions)
     legend = " · ".join(f"{e} {l.split(' / ')[0]}" for e, l, *_ in ZONES)
-    server_time = now.strftime("%a %b %d, %H:%M UTC")
+    server_time = now.strftime("%I:%M %p").lstrip("0") + " UTC (+0)"
 
-    lines = []
+    lines = [""]  # leading blank line pushes MotD away from the bot's name
     try:
         set_at = get_last_commit_time()
     except Exception as e:
@@ -204,13 +219,10 @@ if not MSG_ID:
     print("Copy this ID into the DISCORD_MESSAGE_ID secret, then pin the message.")
     print("=" * 60)
 else:
-    # 1 API call: get all reaction counts at once
     counts = get_message_reactions_summary()
-    # Only query full user lists for emojis that actually have non-bot reactions.
-    # Bot's own seed reaction counts as 1, so we need count > 1.
     reactions = {}
     for emoji, *_ in ZONES:
-        if counts.get(emoji, 0) > 1:
+        if counts.get(emoji, 0) > 1:  # >1 because bot's own seed counts as 1
             reactions[emoji] = get_users_for_reaction(emoji)
         else:
             reactions[emoji] = []
