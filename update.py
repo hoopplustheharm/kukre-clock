@@ -98,14 +98,24 @@ def get_guild_nickname(user_id):
     return r.json().get("nick")  # None if no nickname set
 
 
+MAX_NAME_LEN = 20  # truncate any single name longer than this
+
+
+def truncate(s, limit):
+    if len(s) <= limit:
+        return s
+    return s[: limit - 1] + "…"
+
+
 def format_name(user):
-    """Return 'Nickname (@handle)' if a server nickname exists, else just the display name."""
-    handle = user["username"]
+    """Return 'Nickname (@handle)' if a server nickname exists, else just the display name.
+    Both parts are individually truncated to keep the roster from bleeding across rows."""
+    handle = truncate(user["username"], MAX_NAME_LEN)
     nick = get_guild_nickname(user["id"])
     if nick:
-        return f"{nick} (@{handle})"
-    display = user.get("global_name") or handle
-    return display
+        return f"{truncate(nick, MAX_NAME_LEN)} (@{handle})"
+    display = user.get("global_name") or user["username"]
+    return truncate(display, MAX_NAME_LEN)
 
 
 def wrap_names(names, max_width):
