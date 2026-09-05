@@ -20,8 +20,8 @@ GITHUB_REPO = "hoopplustheharm/kukre-clock"
 GITHUB_FILE = "update.py"
 
 # ---- Monster of the Day (edit both when a new monster is announced, then commit) ----
-MOTD_ID   = 1405
-MOTD_NAME = "Tengu"
+MOTD_ID   = 1317
+MOTD_NAME = "Fur Seal"
 MOTD_URL  = f"https://cp.arcadia-online.org/monster/view/?id={MOTD_ID}"
 
 ZONES = [
