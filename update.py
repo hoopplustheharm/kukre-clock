@@ -1,6 +1,9 @@
 import os
 import time
+import asyncio
 import requests
+import discord
+
 from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
 from urllib.parse import quote
@@ -272,20 +275,305 @@ def seed_reactions(message_id):
             break
         time.sleep(0.3)  # small delay between seeds to stay under Discord's rate limit
 
-if not MSG_ID:
-    msg = post_message(build_content({e: [] for e, *_ in ZONES}))
-    seed_reactions(msg["id"])
-    print("=" * 60)
-    print(f"MESSAGE_ID = {msg['id']}")
-    print("Copy this ID into the DISCORD_MESSAGE_ID secret, then pin the message.")
-    print("=" * 60)
-else:
+# ============================================================
+# REAL-TIME DISCORD BOT
+# ============================================================
+
+ZONE_EMOJIS = {emoji for emoji, *_ in ZONES}
+
+CHANNEL_ID_INT = int(CHANNEL_ID)
+GUILD_ID_INT = int(GUILD_ID)
+MSG_ID_INT = int(MSG_ID) if MSG_ID else None
+
+
+def collect_reactions():
+    """
+    Reads the current reactions from Discord and returns
+    the users associated with every timezone emoji.
+    """
+
     counts = get_message_reactions_summary()
+
     reactions = {}
+
     for emoji, *_ in ZONES:
-        if counts.get(emoji, 0) > 1:  # >1 because bot's own seed counts as 1
+
+        # get_users_for_reaction already removes bot users,
+        # so we don't need the old > 1 check.
+        if counts.get(emoji, 0) > 0:
             reactions[emoji] = get_users_for_reaction(emoji)
         else:
             reactions[emoji] = []
-    edit_message(build_content(reactions))
-    print(f"Updated message {MSG_ID}")
+
+    return reactions
+
+
+def refresh_clock(reason="unknown"):
+    """
+    Performs one full refresh of the Discord clock message.
+    """
+
+    try:
+        reactions = collect_reactions()
+
+        content = build_content(reactions)
+
+        edit_message(content)
+
+        now = datetime.now(timezone.utc)
+
+        print(
+            f"[{now.isoformat()}] "
+            f"Clock updated ({reason})"
+        )
+
+    except Exception as exc:
+        print(
+            f"[ERROR] Failed to refresh clock "
+            f"({reason}): {exc}"
+        )
+
+
+# ------------------------------------------------------------
+# FIRST MESSAGE CREATION
+# ------------------------------------------------------------
+
+if not MSG_ID:
+
+    msg = post_message(
+        build_content(
+            {emoji: [] for emoji, *_ in ZONES}
+        )
+    )
+
+    seed_reactions(msg["id"])
+
+    print("=" * 60)
+    print(f"MESSAGE_ID = {msg['id']}")
+    print(
+        "Copy this ID into the "
+        "DISCORD_MESSAGE_ID environment variable."
+    )
+    print("=" * 60)
+
+    raise SystemExit(0)
+
+
+# ------------------------------------------------------------
+# DISCORD GATEWAY
+# ------------------------------------------------------------
+
+intents = discord.Intents.none()
+
+intents.guilds = True
+intents.guild_messages = True
+intents.guild_reactions = True
+
+
+client = discord.Client(
+    intents=intents
+)
+
+
+refresh_lock = asyncio.Lock()
+
+minute_task = None
+
+
+async def refresh_async(reason):
+    """
+    Run the synchronous REST refresh without blocking
+    the Discord Gateway connection.
+    """
+
+    async with refresh_lock:
+
+        try:
+
+            await asyncio.to_thread(
+                refresh_clock,
+                reason,
+            )
+
+        except Exception as exc:
+
+            print(
+                f"[ERROR] Async refresh failed "
+                f"({reason}): {exc}"
+            )
+
+
+async def minute_worker():
+    """
+    Updates exactly at the beginning of every minute.
+
+    Example:
+        22:41:00
+        22:42:00
+        22:43:00
+    """
+
+    await client.wait_until_ready()
+
+    while not client.is_closed():
+
+        now = datetime.now(timezone.utc)
+
+        seconds_until_next_minute = (
+            60
+            - now.second
+            - now.microsecond / 1_000_000
+        )
+
+        await asyncio.sleep(
+            seconds_until_next_minute
+        )
+
+        await refresh_async(
+            "minute tick"
+        )
+
+
+def is_clock_reaction(payload):
+    """
+    Check whether a Discord reaction belongs to
+    our clock message and one of our timezone emojis.
+    """
+
+    if payload.channel_id != CHANNEL_ID_INT:
+        return False
+
+    if payload.message_id != MSG_ID_INT:
+        return False
+
+    emoji = str(payload.emoji)
+
+    if emoji not in ZONE_EMOJIS:
+        return False
+
+    return True
+
+
+# ------------------------------------------------------------
+# BOT READY
+# ------------------------------------------------------------
+
+@client.event
+async def on_ready():
+
+    global minute_task
+
+    print(
+        f"Logged in as "
+        f"{client.user} ({client.user.id})"
+    )
+
+    print(
+        f"Watching message {MSG_ID_INT}"
+    )
+
+    # Refresh immediately when the bot starts/reconnects.
+    await refresh_async(
+        "startup"
+    )
+
+    # Make sure only one timer exists,
+    # because on_ready can run again after reconnects.
+    if (
+        minute_task is None
+        or minute_task.done()
+    ):
+
+        minute_task = asyncio.create_task(
+            minute_worker()
+        )
+
+
+# ------------------------------------------------------------
+# REACTION ADDED
+# ------------------------------------------------------------
+
+@client.event
+async def on_raw_reaction_add(payload):
+
+    if not is_clock_reaction(payload):
+        return
+
+    # Ignore the bot's own seeded reactions.
+    if (
+        client.user
+        and payload.user_id == client.user.id
+    ):
+        return
+
+    print(
+        f"Reaction added: "
+        f"{payload.emoji} "
+        f"by {payload.user_id}"
+    )
+
+    # Tiny delay so Discord REST state is fully consistent.
+    await asyncio.sleep(0.15)
+
+    await refresh_async(
+        f"reaction added {payload.emoji}"
+    )
+
+
+# ------------------------------------------------------------
+# REACTION REMOVED
+# ------------------------------------------------------------
+
+@client.event
+async def on_raw_reaction_remove(payload):
+
+    if not is_clock_reaction(payload):
+        return
+
+    # Ignore the bot's own seed.
+    if (
+        client.user
+        and payload.user_id == client.user.id
+    ):
+        return
+
+    print(
+        f"Reaction removed: "
+        f"{payload.emoji} "
+        f"by {payload.user_id}"
+    )
+
+    await asyncio.sleep(0.15)
+
+    await refresh_async(
+        f"reaction removed {payload.emoji}"
+    )
+
+
+# ------------------------------------------------------------
+# ALL REACTIONS CLEARED
+# ------------------------------------------------------------
+
+@client.event
+async def on_raw_reaction_clear(payload):
+
+    if payload.channel_id != CHANNEL_ID_INT:
+        return
+
+    if payload.message_id != MSG_ID_INT:
+        return
+
+    await asyncio.sleep(0.15)
+
+    await refresh_async(
+        "all reactions cleared"
+    )
+
+
+# ------------------------------------------------------------
+# START BOT
+# ------------------------------------------------------------
+
+print("Starting Guildie Clock...")
+
+client.run(BOT_TOKEN)
